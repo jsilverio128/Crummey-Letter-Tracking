@@ -2,7 +2,6 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useILITData } from '../hooks/use-ilit-data';
 import { ColumnMappingDialog } from './column-mapping-dialog';
-import * as XLSX from 'xlsx';
 import { rowsToRecords } from '../lib/parse-utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
@@ -60,20 +59,31 @@ export function ILITTracker() {
   const [editRec, setEditRec] = useState<any>(null);
   const toaster = useToaster();
 
-  function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
     const f = e.target.files?.[0];
     if (!f) return;
-    const reader = new FileReader();
-    reader.onload = (ev) => {
-      const data = ev.target?.result;
-      const wb = XLSX.read(data, { type: 'array' });
-      const first = wb.SheetNames[0];
-      const ws = wb.Sheets[first];
-      const rows = XLSX.utils.sheet_to_json(ws, { defval: '' }) as Record<string, any>[];
+    if (!f.name.toLowerCase().endsWith('.xlsx')) {
+      // reject .xls and other types
+      toaster.push({ id: Date.now().toString(), message: 'Please upload .xlsx files only', type: 'error' });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    const form = new FormData();
+    form.append('file', f);
+    try {
+      const res = await fetch('/api/upload-excel', { method: 'POST', body: form });
+      if (!res.ok) {
+        const txt = await res.text();
+        toaster.push({ id: Date.now().toString(), message: 'Upload failed: ' + txt, type: 'error' });
+        return;
+      }
+      const json = await res.json();
+      const rows = (json.rawData ?? []) as Record<string, any>[];
       setSampleRows(rows.slice(0, 10));
       setMappingOpen(true);
-    };
-    reader.readAsArrayBuffer(f);
+    } catch (err) {
+      toaster.push({ id: Date.now().toString(), message: 'Upload failed', type: 'error' });
+    }
   }
 
   function handleImport(mappedRows: Record<string, any>[]) {
@@ -102,7 +112,7 @@ export function ILITTracker() {
           <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold">ILIT Policy Tracker</h2>
           <div className="flex gap-2">
-            <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
+            <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFile} className="hidden" />
             <Button onClick={() => fileRef.current?.click()}>Upload Excel</Button>
             <Button onClick={() => { exportCSV(records); }}>Export All CSV</Button>
             <Button onClick={() => {

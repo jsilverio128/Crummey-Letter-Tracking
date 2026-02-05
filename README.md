@@ -20,7 +20,7 @@ Open http://localhost:3000
 
 Notes
 
-- Upload an Excel file (.xlsx or .xls) using the Upload button.
+- Upload an Excel file (.xlsx) using the Upload button.
 - After selecting a file you'll be shown a column-mapping dialog. Map your spreadsheet columns to the ILIT fields and import.
 - Data is stored in `localStorage` (no backend database).
 - You can filter, sort, edit, mark letters sent, and export CSV.
