@@ -1,0 +1,2 @@
+trustName,accountNumber,policyNumber,policyType,insuranceCompany,beneficiary,trustees,paymentFrequency,premiumAmount,premiumDueDate,notes
+Example Trust,AC123,PN456,Whole Life,Acme Insurance,John Doe,Trustee Name,Annual,1200,2026-03-15,Sample note
