@@ -24,6 +24,16 @@ function statusFor(record: any) {
   return { label: 'Pending', color: 'blue' };
 }
 
+function formatDateMMDD(dateStr?: string | null) {
+  if (!dateStr) return 'N/A';
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d.getTime())) return 'N/A';
+  const mm = String(d.getMonth() + 1).padStart(2, '0');
+  const dd = String(d.getDate()).padStart(2, '0');
+  const yyyy = d.getFullYear();
+  return `${mm}/${dd}/${yyyy}`;
+}
+
 function exportCSV(rows: any[]) {
   const keys = Object.keys(rows[0] ?? {});
   const csv = [keys.join(',')]
@@ -41,7 +51,7 @@ function exportCSV(rows: any[]) {
 }
 
 export function ILITTracker() {
-  const { records, addMany, update, remove, replaceAll } = useILITData();
+  const { records, addMany, update, remove, replaceAll, clear } = useILITData();
   const [mappingOpen, setMappingOpen] = useState(false);
   const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -70,6 +80,8 @@ export function ILITTracker() {
     try {
       const records = rowsToRecords(mappedRows);
       addMany(records);
+      // reset file input so same filename can be selected again
+      if (fileRef.current) fileRef.current.value = '';
       toaster.push({ id: Date.now().toString(), message: 'Imported ' + records.length + ' records', type: 'success' });
     } catch (e) {
       toaster.push({ id: Date.now().toString(), message: 'Import failed', type: 'error' });
@@ -87,13 +99,18 @@ export function ILITTracker() {
 
   return (
       <div className="p-6">
-        <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-4">
           <h2 className="text-2xl font-bold">ILIT Policy Tracker</h2>
           <div className="flex gap-2">
             <input ref={fileRef} type="file" accept=".xlsx,.xls" onChange={handleFile} className="hidden" />
             <Button onClick={() => fileRef.current?.click()}>Upload Excel</Button>
             <Button onClick={() => { exportCSV(records); }}>Export All CSV</Button>
-            <Button onClick={() => { replaceAll([]); toaster.push({ id: Date.now().toString(), message: 'Cleared all records', type: 'success' }); }}>Clear</Button>
+            <Button onClick={() => {
+                // fully clear stored data and UI state
+                clear();
+                if (fileRef.current) fileRef.current.value = '';
+                toaster.push({ id: Date.now().toString(), message: 'Cleared all records', type: 'success' });
+            }}>Clear</Button>
           </div>
         </div>
 
@@ -123,13 +140,13 @@ export function ILITTracker() {
                 {filtered.map(r => (
                   <tr key={r.id} className="border-t">
                     <td className="p-2">{r.trustName}</td>
-                    <td className="p-2">{r.premiumDueDate ?? '—'}</td>
+                    <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
                     <td className="p-2">{r.premiumAmount ?? '—'}</td>
                     <td className="p-2">{(() => { const s = statusFor(r); return <Badge color={s.color}>{s.label}</Badge>; })()}</td>
                     <td className="p-2 flex gap-2">
                       <Button onClick={() => setEditRec(r)}>Edit</Button>
                       <Button onClick={() => { update(r.id, { crummeySent: true, crummeyLetterSendDate: new Date().toISOString().slice(0,10) }); }}>Mark Sent</Button>
-                      <Button onClick={() => exportCSV([r])}>Export Row</Button>
+                      
                     </td>
                   </tr>
                 ))}
