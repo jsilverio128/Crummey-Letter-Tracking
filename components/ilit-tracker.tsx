@@ -1,6 +1,7 @@
 "use client";
 import React, { useMemo, useRef, useState } from 'react';
 import { useILITData } from '../hooks/use-ilit-data';
+import { useActivity } from '../hooks/use-activity';
 import { ColumnMappingDialog } from './column-mapping-dialog';
 import { rowsToRecords } from '../lib/parse-utils';
 import { Button } from './ui/button';
@@ -51,6 +52,7 @@ function exportCSV(rows: any[]) {
 
 export function ILITTracker() {
   const { records, addMany, update, remove, replaceAll, clear } = useILITData();
+  const { log: logActivity } = useActivity();
   const [mappingOpen, setMappingOpen] = useState(false);
   const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -90,6 +92,7 @@ export function ILITTracker() {
     try {
       const records = rowsToRecords(mappedRows);
       addMany(records);
+      logActivity('import', `Imported ${records.length} record${records.length !== 1 ? 's' : ''}`);
       // reset file input so same filename can be selected again
       if (fileRef.current) fileRef.current.value = '';
       toaster.push({ id: Date.now().toString(), message: 'Imported ' + records.length + ' records', type: 'success' });
@@ -118,6 +121,7 @@ export function ILITTracker() {
             <Button onClick={() => {
                 // fully clear stored data and UI state
                 clear();
+                logActivity('clear', 'Cleared all records');
                 if (fileRef.current) fileRef.current.value = '';
                 toaster.push({ id: Date.now().toString(), message: 'Cleared all records', type: 'success' });
             }}>Clear</Button>
@@ -155,7 +159,10 @@ export function ILITTracker() {
                     <td className="p-2">{(() => { const s = statusFor(r); return <Badge color={s.color}>{s.label}</Badge>; })()}</td>
                     <td className="p-2 flex gap-2">
                       <Button onClick={() => setEditRec(r)}>Edit</Button>
-                      <Button onClick={() => { update(r.id, { crummeySent: true, crummeyLetterSendDate: new Date().toISOString().slice(0,10) }); }}>Mark Sent</Button>
+                      <Button onClick={() => { 
+                        update(r.id, { crummeySent: true, crummeyLetterSendDate: new Date().toISOString().slice(0,10) });
+                        logActivity('letter_sent', `Marked letter sent for ${r.trustName}`);
+                      }}>Mark Sent</Button>
                       
                     </td>
                   </tr>
@@ -174,19 +181,43 @@ export function ILITTracker() {
               <div className="grid grid-cols-2 gap-2 mt-3">
                 <div>
                   <label className="text-xs">Trust Name</label>
-                  <Input defaultValue={editRec.trustName} onBlur={e => update(editRec.id, { trustName: e.currentTarget.value })} />
+                  <Input defaultValue={editRec.trustName} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== editRec.trustName) {
+                      update(editRec.id, { trustName: newValue });
+                      logActivity('edit', `Updated ${editRec.trustName} - Trust Name`);
+                    }
+                  }} />
                 </div>
                 <div>
                   <label className="text-xs">Premium Due</label>
-                  <Input type="date" defaultValue={editRec.premiumDueDate} onBlur={e => update(editRec.id, { premiumDueDate: e.currentTarget.value })} />
+                  <Input type="date" defaultValue={editRec.premiumDueDate} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== editRec.premiumDueDate) {
+                      update(editRec.id, { premiumDueDate: newValue });
+                      logActivity('edit', `Updated ${editRec.trustName} - Premium Due Date`);
+                    }
+                  }} />
                 </div>
                 <div>
                   <label className="text-xs">Amount</label>
-                  <Input type="number" defaultValue={editRec.premiumAmount} onBlur={e => update(editRec.id, { premiumAmount: Number(e.currentTarget.value) || 0 })} />
+                  <Input type="number" defaultValue={editRec.premiumAmount} onBlur={e => {
+                    const newValue = Number(e.currentTarget.value) || 0;
+                    if (newValue !== editRec.premiumAmount) {
+                      update(editRec.id, { premiumAmount: newValue });
+                      logActivity('edit', `Updated ${editRec.trustName} - Amount`);
+                    }
+                  }} />
                 </div>
                 <div>
                   <label className="text-xs">Crummey Sent</label>
-                  <select defaultValue={editRec.crummeySent ? 'yes' : 'no'} onChange={e => update(editRec.id, { crummeySent: e.currentTarget.value === 'yes' })} className="border rounded p-1">
+                  <select defaultValue={editRec.crummeySent ? 'yes' : 'no'} onChange={e => {
+                    const newValue = e.currentTarget.value === 'yes';
+                    if (newValue !== editRec.crummeySent) {
+                      update(editRec.id, { crummeySent: newValue });
+                      logActivity('edit', `Updated ${editRec.trustName} - Crummey Sent Status`);
+                    }
+                  }} className="border rounded p-1">
                     <option value="no">No</option>
                     <option value="yes">Yes</option>
                   </select>

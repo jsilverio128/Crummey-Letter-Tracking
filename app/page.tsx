@@ -1,10 +1,5 @@
-import React from 'react';
-import { ILITTracker } from '../components/ilit-tracker';
+import { redirect } from 'next/navigation';
 
-export default function Page() {
-  return (
-    <main>
-      <ILITTracker />
-    </main>
-  );
+export default function Home() {
+  redirect('/dashboard');
 }
