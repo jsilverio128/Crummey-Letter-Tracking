@@ -1,7 +1,7 @@
 export type ActivityEvent = {
   id: string;
   timestamp: string; // ISO string
-  type: 'import' | 'clear' | 'letter_sent' | 'edit' | 'delete' | 'upload';
+  type: 'import' | 'clear' | 'letter_sent' | 'edit' | 'delete' | 'upload' | 'pdf_generated';
   description: string;
 };
 

@@ -9,11 +9,13 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@types/pdfkit": "^0.17.4",
     "clsx": "^1.2.1",
+    "exceljs": "^4.3.0",
     "next": "^15.5.12",
+    "pdfkit": "^0.17.2",
     "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "exceljs": "^4.3.0"
+    "react-dom": "^18.2.0"
   },
   "devDependencies": {
     "@types/node": "^20.4.2",
