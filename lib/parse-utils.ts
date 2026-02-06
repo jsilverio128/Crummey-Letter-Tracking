@@ -67,7 +67,7 @@ function determineStatus(record: any): PolicyStatus {
   return 'Pending';
 }
 
-export function normalizeRowToRecord(row: Record<string, any>): ILITPolicyRecord {
+export function normalizeRowToRecord(row: Record<string, any>, leadDays: number = 35): ILITPolicyRecord {
   const now = new Date().toISOString();
   
   // Parse amounts
@@ -78,10 +78,10 @@ export function normalizeRowToRecord(row: Record<string, any>): ILITPolicyRecord
   const giftDate = parseDate(row['giftDate'] ?? row['GiftDate'] ?? row['Gift Date']);
   const crummeyLetterSentDate = parseDate(row['crummeyLetterSentDate'] ?? row['CrummeyLetterSentDate'] ?? row['LetterSentDate']);
   
-  // Auto-calculate crummeyLetterSendDate if not provided
+  // Auto-calculate crummeyLetterSendDate if not provided, using leadDays setting
   let crummeyLetterSendDate = parseDate(row['crummeyLetterSendDate'] ?? row['CrummeyLetterSendDate'] ?? row['LetterSendDate']);
   if (!crummeyLetterSendDate && premiumDueDate) {
-    crummeyLetterSendDate = calculateCrummeyLetterSendDate(premiumDueDate, 35);
+    crummeyLetterSendDate = calculateCrummeyLetterSendDate(premiumDueDate, leadDays);
   }
   
   // Parse trust/ILIT name (prefer ilitName, fall back to trustName)
@@ -121,6 +121,6 @@ export function normalizeRowToRecord(row: Record<string, any>): ILITPolicyRecord
   return record as ILITPolicyRecord;
 }
 
-export function rowsToRecords(rows: Record<string, any>[]) {
-  return rows.map(normalizeRowToRecord);
+export function rowsToRecords(rows: Record<string, any>[], leadDays: number = 35) {
+  return rows.map(row => normalizeRowToRecord(row, leadDays));
 }

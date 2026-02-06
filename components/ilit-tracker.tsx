@@ -2,6 +2,7 @@
 import React, { useMemo, useRef, useState } from 'react';
 import { useILITData } from '../hooks/use-ilit-data';
 import { useActivity } from '../hooks/use-activity';
+import { useSettings } from '../hooks/use-settings';
 import { ColumnMappingDialog } from './column-mapping-dialog';
 import { rowsToRecords } from '../lib/parse-utils';
 import { Button } from './ui/button';
@@ -67,6 +68,7 @@ function exportCSV(rows: any[]) {
 export function ILITTracker() {
   const { records, addMany, update, remove, replaceAll, clear } = useILITData();
   const { log: logActivity } = useActivity();
+  const { reminderLeadDays } = useSettings();
   const [mappingOpen, setMappingOpen] = useState(false);
   const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
@@ -104,7 +106,7 @@ export function ILITTracker() {
 
   function handleImport(mappedRows: Record<string, any>[]) {
     try {
-      const records = rowsToRecords(mappedRows);
+      const records = rowsToRecords(mappedRows, reminderLeadDays);
       addMany(records);
       logActivity('import', `Imported ${records.length} record${records.length !== 1 ? 's' : ''}`);
       // reset file input so same filename can be selected again
