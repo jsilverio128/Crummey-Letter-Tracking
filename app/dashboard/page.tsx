@@ -38,26 +38,29 @@ export default function DashboardPage() {
 
     records.forEach((record: any) => {
       const daysUntilDue = getDaysFromToday(record.premiumDueDate);
+      const status = record.status || 'Pending';
+      const isPaid = status === 'Paid';
 
       // Due in 30 Days
       if (daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 30) {
         dueIn30++;
       }
 
-      // Due in 60 Days
+      // Due in 60 Days & Outstanding Amount
       if (daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 60) {
         dueIn60++;
 
-        // Outstanding: sum of premiumAmount for policies due within 60 days
-        if (record.premiumAmount) {
+        // Outstanding: sum premiums where status != Paid and premiumDueDate within 60 days
+        if (!isPaid && record.premiumAmount) {
           outstanding += record.premiumAmount;
         }
       }
 
-      // Letters Pending: crummeySent is false AND (letterSendDate is today or earlier)
-      if (!record.crummeySent && record.crummeyLetterSendDate) {
-        const sendDate = getDaysFromToday(record.crummeyLetterSendDate);
-        if (sendDate !== null && sendDate <= 0) {
+      // Letters Pending: today >= crummeyLetterSendDate and status != "Letter Sent"
+      if (status !== 'Letter Sent' && record.crummeyLetterSendDate) {
+        const daysTillSendDate = getDaysFromToday(record.crummeyLetterSendDate);
+        // If send date has passed or is today (daysTillSendDate <= 0)
+        if (daysTillSendDate !== null && daysTillSendDate <= 0) {
           lettersPending++;
         }
       }

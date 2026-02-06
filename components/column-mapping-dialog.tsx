@@ -11,19 +11,42 @@ type MappingDialogProps = {
   onImport: (mappedRows: Record<string, any>[]) => void;
 };
 
-const DEFAULT_FIELDS = [
-  'trustName',
-  'accountNumber',
-  'policyNumber',
-  'policyType',
-  'insuranceCompany',
-  'beneficiary',
-  'trustees',
-  'paymentFrequency',
-  'premiumAmount',
-  'premiumDueDate',
-  'notes'
-];
+const FIELD_GROUPS = {
+  'Core ILIT Information': [
+    'ilitName',
+    'insuredName',
+    'trustees',
+  ],
+  'Policy Details': [
+    'policyName',
+    'policyNumber',
+    'accountNumber',
+    'policyType',
+    'insuranceCompany',
+    'beneficiary',
+    'paymentFrequency',
+  ],
+  'Dates & Amount': [
+    'premiumDueDate',
+    'premiumAmount',
+    'giftDate',
+    'crummeyLetterSendDate',
+    'crummeyLetterSentDate',
+  ],
+  'Crummey & Status': [
+    'crummeyRequired',
+    'crummeySent',
+    'crummeyMethod',
+    'crummeyRecipients',
+    'crummeyProofLink',
+    'status',
+  ],
+  'Notes': [
+    'notes',
+  ],
+};
+
+const REQUIRED_FIELDS = ['ilitName'];
 
 export function ColumnMappingDialog({ open, sampleRows, onClose, onImport }: MappingDialogProps) {
   const headers = useMemo(() => {
@@ -34,7 +57,7 @@ export function ColumnMappingDialog({ open, sampleRows, onClose, onImport }: Map
 
   const [map, setMap] = useState<Record<string, string>>(() => {
     const m: Record<string, string> = {};
-    DEFAULT_FIELDS.forEach(f => (m[f] = ''));
+    Object.values(FIELD_GROUPS).flat().forEach(f => (m[f] = ''));
     return m;
   });
 
@@ -53,28 +76,44 @@ export function ColumnMappingDialog({ open, sampleRows, onClose, onImport }: Map
 
   return (
     <Dialog open={open} onClose={onClose}>
-      <h3 className="text-lg font-semibold">Map Columns</h3>
-      <p className="text-sm text-gray-600">Map your spreadsheet columns to the ILIT fields.</p>
-      <div className="mt-4 grid grid-cols-2 gap-3">
-        {DEFAULT_FIELDS.map(field => (
-          <div key={field}>
-            <label className="text-xs font-medium">{field}</label>
-            <select
-              value={map[field]}
-              onChange={e => setMap(s => ({ ...s, [field]: e.target.value }))}
-              className="w-full border rounded p-1"
-            >
-              <option value="">--</option>
-              {headers.map(h => (
-                <option key={h} value={h}>
-                  {h}
-                </option>
+      <h3 className="text-lg font-semibold">Map Columns to ILIT Fields</h3>
+      <p className="text-sm text-gray-600 mb-4">Select which spreadsheet column maps to each field. Leave blank to skip.</p>
+      
+      <div className="max-h-96 overflow-y-auto space-y-4">
+        {Object.entries(FIELD_GROUPS).map(([groupName, fields]) => (
+          <div key={groupName}>
+            <h4 className="text-xs font-semibold text-gray-700 uppercase mb-2">{groupName}</h4>
+            <div className="grid grid-cols-2 gap-2 pl-3">
+              {fields.map(field => (
+                <div key={field}>
+                  <label className="text-xs font-medium flex items-center gap-1">
+                    {field}
+                    {REQUIRED_FIELDS.includes(field) && <span className="text-red-500">*</span>}
+                  </label>
+                  <select
+                    value={map[field]}
+                    onChange={e => setMap(s => ({ ...s, [field]: e.target.value }))}
+                    className="w-full border rounded p-1 text-xs"
+                  >
+                    <option value="">-- Skip --</option>
+                    {headers.map(h => (
+                      <option key={h} value={h}>
+                        {h}
+                      </option>
+                    ))}
+                  </select>
+                  {map[field] && sampleRows[0] && (
+                    <div className="text-xs text-gray-500 mt-0.5 truncate">
+                      Preview: {String(sampleRows[0][map[field]] ?? '').slice(0, 30)}
+                    </div>
+                  )}
+                </div>
               ))}
-            </select>
-            <div className="text-xs text-gray-500 mt-1">Sample: {String(sampleRows[0]?.[map[field]] ?? '')}</div>
+            </div>
           </div>
         ))}
       </div>
+
       <div className="mt-4 flex justify-end gap-2">
         <Button onClick={onClose} className="bg-gray-400">Cancel</Button>
         <Button onClick={handleImport}>Import</Button>

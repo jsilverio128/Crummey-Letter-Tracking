@@ -13,14 +13,28 @@ import { Input } from './ui/input';
 import { useToaster } from './ui/toaster';
 
 function statusFor(record: any) {
+  // Use explicit status field if available
+  if (record.status) {
+    const statusColorMap: Record<string, string> = {
+      'Paid': 'green',
+      'Letter Sent': 'green',
+      'Due Soon': 'orange',
+      'Overdue': 'red',
+      'Pending': 'blue',
+      'Not Started': 'gray'
+    };
+    return { label: record.status, color: statusColorMap[record.status] || 'blue' };
+  }
+  
+  // Legacy: infer from crummeySent
   const today = new Date();
-  if (record.crummeySent) return { label: 'Sent', color: 'green' };
-  if (!record.premiumDueDate) return { label: 'Pending', color: 'blue' };
+  if (record.crummeySent) return { label: 'Letter Sent', color: 'green' };
+  if (!record.premiumDueDate) return { label: 'Not Started', color: 'gray' };
   const due = new Date(record.premiumDueDate + 'T00:00:00');
   const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
   if (diff < 0) return { label: 'Overdue', color: 'red' };
   if (diff <= 7) return { label: 'Due Soon', color: 'orange' };
-  if (diff <= 35) return { label: 'Letter Due', color: 'yellow' };
+  if (diff <= 35) return { label: 'Pending', color: 'blue' };
   return { label: 'Pending', color: 'blue' };
 }
 
@@ -103,8 +117,14 @@ export function ILITTracker() {
 
   const filtered = useMemo(() => {
     let list = records.slice();
-    if (filter) list = list.filter(r => (r.trustName || '').toLowerCase().includes(filter.toLowerCase()));
-    if (sortBy === 'trust') list.sort((a,b) => (a.trustName || '').localeCompare(b.trustName || ''));
+    if (filter) list = list.filter(r => {
+      const ilitName = (r.ilitName || '').toLowerCase();
+      const insuredName = (r.insuredName || '').toLowerCase();
+      const policyNum = (r.policyNumber || '').toLowerCase();
+      const searchTerm = filter.toLowerCase();
+      return ilitName.includes(searchTerm) || insuredName.includes(searchTerm) || policyNum.includes(searchTerm);
+    });
+    if (sortBy === 'trust') list.sort((a,b) => (a.ilitName || '').localeCompare(b.ilitName || ''));
     if (sortBy === 'due') list.sort((a,b) => ((a.premiumDueDate || '')).localeCompare(b.premiumDueDate || ''));
     if (sortBy === 'amount') list.sort((a,b) => (Number(b.premiumAmount||0) - Number(a.premiumAmount||0)));
     return list;
@@ -130,7 +150,7 @@ export function ILITTracker() {
 
         <Card>
           <div className="flex items-center gap-3 mb-3">
-            <Input placeholder="Filter by trust name" value={filter} onChange={e => setFilter(e.target.value)} />
+            <Input placeholder="Filter by trust, insured name, or policy number" value={filter} onChange={e => setFilter(e.target.value)} />
             <select onChange={e => setSortBy((e.target.value as any) || null)} className="border rounded p-1">
               <option value="">Default</option>
               <option value="trust">Sort A–Z</option>
@@ -143,30 +163,42 @@ export function ILITTracker() {
             <Table>
               <THead>
                 <tr>
-                  <th className="p-2">Trust</th>
+                  <th className="p-2">ILIT Name</th>
+                  <th className="p-2">Insured</th>
+                  <th className="p-2">Trustees</th>
+                  <th className="p-2">Policy</th>
                   <th className="p-2">Premium Due</th>
                   <th className="p-2">Amount</th>
-                  <th className="p-2">Crummey</th>
+                  <th className="p-2">Gift Date</th>
+                  <th className="p-2">Letter Send</th>
+                  <th className="p-2">Status</th>
                   <th className="p-2">Actions</th>
                 </tr>
               </THead>
               <TBody>
-                {filtered.map(r => (
-                  <tr key={r.id} className="border-t">
-                    <td className="p-2">{r.trustName}</td>
-                    <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
-                    <td className="p-2">{r.premiumAmount ?? '—'}</td>
-                    <td className="p-2">{(() => { const s = statusFor(r); return <Badge color={s.color}>{s.label}</Badge>; })()}</td>
-                    <td className="p-2 flex gap-2">
-                      <Button onClick={() => setEditRec(r)}>Edit</Button>
-                      <Button onClick={() => { 
-                        update(r.id, { crummeySent: true, crummeyLetterSendDate: new Date().toISOString().slice(0,10) });
-                        logActivity('letter_sent', `Marked letter sent for ${r.trustName}`);
-                      }}>Mark Sent</Button>
-                      
-                    </td>
-                  </tr>
-                ))}
+                {filtered.map(r => {
+                  const displayName = r.ilitName || 'N/A';
+                  return (
+                    <tr key={r.id} className="border-t text-sm">
+                      <td className="p-2 font-medium">{displayName}</td>
+                      <td className="p-2 text-gray-700">{r.insuredName || '—'}</td>
+                      <td className="p-2 text-gray-700">{r.trustees ? r.trustees.split(/[;,]/).map(t => t.trim()).join(', ') : '—'}</td>
+                      <td className="p-2 text-gray-700">{r.policyNumber || '—'}</td>
+                      <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
+                      <td className="p-2 text-right">{r.premiumAmount ? `$${r.premiumAmount.toLocaleString()}` : '—'}</td>
+                      <td className="p-2">{formatDateMMDD(r.giftDate)}</td>
+                      <td className="p-2">{formatDateMMDD(r.crummeyLetterSendDate)}</td>
+                      <td className="p-2">{(() => { const s = statusFor(r); return <Badge color={s.color}>{s.label}</Badge>; })()}</td>
+                      <td className="p-2 flex gap-1">
+                        <Button onClick={() => setEditRec(r)} className="text-xs px-2 py-1">Edit</Button>
+                        <Button onClick={() => { 
+                          update(r.id, { crummeySent: true, crummeyLetterSentDate: new Date().toISOString().slice(0,10), status: 'Letter Sent' });
+                          logActivity('letter_sent', `Marked letter sent for ${displayName}`);
+                        }} className="text-xs px-2 py-1">Sent</Button>
+                      </td>
+                    </tr>
+                  );
+                })}
               </TBody>
             </Table>
           </div>
@@ -176,51 +208,174 @@ export function ILITTracker() {
 
         <Dialog open={!!editRec} onClose={() => setEditRec(null)}>
           {editRec && (
-            <div>
-              <h3 className="text-lg font-semibold">Edit {editRec.trustName}</h3>
-              <div className="grid grid-cols-2 gap-2 mt-3">
+            <div className="max-w-2xl max-h-96 overflow-y-auto">
+              <h3 className="text-lg font-semibold mb-4">Edit {editRec.ilitName}</h3>
+              <div className="grid grid-cols-2 gap-3">
+                {/* Core ILIT Fields */}
                 <div>
-                  <label className="text-xs">Trust Name</label>
-                  <Input defaultValue={editRec.trustName} onBlur={e => {
+                  <label className="text-xs font-medium">ILIT Name</label>
+                  <Input defaultValue={editRec.ilitName || ''} onBlur={e => {
                     const newValue = e.currentTarget.value;
-                    if (newValue !== editRec.trustName) {
-                      update(editRec.id, { trustName: newValue });
-                      logActivity('edit', `Updated ${editRec.trustName} - Trust Name`);
+                    if (newValue !== (editRec.ilitName || '')) {
+                      update(editRec.id, { ilitName: newValue });
+                      logActivity('edit', `Updated ILIT Name to ${newValue}`);
                     }
                   }} />
                 </div>
                 <div>
-                  <label className="text-xs">Premium Due</label>
-                  <Input type="date" defaultValue={editRec.premiumDueDate} onBlur={e => {
+                  <label className="text-xs font-medium">Insured Name</label>
+                  <Input defaultValue={editRec.insuredName || ''} onBlur={e => {
                     const newValue = e.currentTarget.value;
-                    if (newValue !== editRec.premiumDueDate) {
+                    if (newValue !== (editRec.insuredName || '')) {
+                      update(editRec.id, { insuredName: newValue });
+                      logActivity('edit', `Updated Insured Name`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Trustees</label>
+                  <Input defaultValue={editRec.trustees || ''} placeholder="Separate with ; or ," onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.trustees || '')) {
+                      update(editRec.id, { trustees: newValue });
+                      logActivity('edit', `Updated Trustees`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Policy Name</label>
+                  <Input defaultValue={editRec.policyName || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.policyName || '')) {
+                      update(editRec.id, { policyName: newValue });
+                      logActivity('edit', `Updated Policy Name`);
+                    }
+                  }} />
+                </div>
+                
+                {/* Policy Details */}
+                <div>
+                  <label className="text-xs font-medium">Policy Number</label>
+                  <Input defaultValue={editRec.policyNumber || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.policyNumber || '')) {
+                      update(editRec.id, { policyNumber: newValue });
+                      logActivity('edit', `Updated Policy Number`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Insurance Company</label>
+                  <Input defaultValue={editRec.insuranceCompany || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.insuranceCompany || '')) {
+                      update(editRec.id, { insuranceCompany: newValue });
+                      logActivity('edit', `Updated Insurance Company`);
+                    }
+                  }} />
+                </div>
+                
+                {/* Dates & Amount */}
+                <div>
+                  <label className="text-xs font-medium">Premium Due Date</label>
+                  <Input type="date" defaultValue={editRec.premiumDueDate || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.premiumDueDate || '')) {
                       update(editRec.id, { premiumDueDate: newValue });
-                      logActivity('edit', `Updated ${editRec.trustName} - Premium Due Date`);
+                      logActivity('edit', `Updated Premium Due Date`);
                     }
                   }} />
                 </div>
                 <div>
-                  <label className="text-xs">Amount</label>
-                  <Input type="number" defaultValue={editRec.premiumAmount} onBlur={e => {
-                    const newValue = Number(e.currentTarget.value) || 0;
+                  <label className="text-xs font-medium">Premium Amount</label>
+                  <Input type="number" defaultValue={editRec.premiumAmount || ''} onBlur={e => {
+                    const newValue = Number(e.currentTarget.value) || undefined;
                     if (newValue !== editRec.premiumAmount) {
                       update(editRec.id, { premiumAmount: newValue });
-                      logActivity('edit', `Updated ${editRec.trustName} - Amount`);
+                      logActivity('edit', `Updated Premium Amount`);
                     }
                   }} />
                 </div>
                 <div>
-                  <label className="text-xs">Crummey Sent</label>
-                  <select defaultValue={editRec.crummeySent ? 'yes' : 'no'} onChange={e => {
-                    const newValue = e.currentTarget.value === 'yes';
-                    if (newValue !== editRec.crummeySent) {
-                      update(editRec.id, { crummeySent: newValue });
-                      logActivity('edit', `Updated ${editRec.trustName} - Crummey Sent Status`);
+                  <label className="text-xs font-medium">Gift Date</label>
+                  <Input type="date" defaultValue={editRec.giftDate || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.giftDate || '')) {
+                      update(editRec.id, { giftDate: newValue });
+                      logActivity('edit', `Updated Gift Date`);
                     }
-                  }} className="border rounded p-1">
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Status</label>
+                  <select 
+                    defaultValue={editRec.status || ''} 
+                    onChange={e => {
+                      const newValue = e.currentTarget.value;
+                      if (newValue !== editRec.status) {
+                        update(editRec.id, { status: newValue ? (newValue as any) : undefined });
+                        logActivity('edit', `Updated Status to ${newValue}`);
+                      }
+                    }} 
+                    className="border rounded p-1 w-full"
+                  >
+                    <option value="">Auto-Calculate</option>
+                    <option value="Not Started">Not Started</option>
+                    <option value="Pending">Pending</option>
+                    <option value="Due Soon">Due Soon</option>
+                    <option value="Overdue">Overdue</option>
+                    <option value="Letter Sent">Letter Sent</option>
+                    <option value="Paid">Paid</option>
+                  </select>
+                </div>
+                
+                {/* Crummey Fields */}
+                <div>
+                  <label className="text-xs font-medium">Crummey Letter Send Date</label>
+                  <Input type="date" defaultValue={editRec.crummeyLetterSendDate || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.crummeyLetterSendDate || '')) {
+                      update(editRec.id, { crummeyLetterSendDate: newValue || null });
+                      logActivity('edit', `Updated Crummey Letter Send Date`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Crummey Letter Sent Date</label>
+                  <Input type="date" defaultValue={editRec.crummeyLetterSentDate || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.crummeyLetterSentDate || '')) {
+                      update(editRec.id, { crummeyLetterSentDate: newValue || null });
+                      logActivity('edit', `Updated Crummey Letter Sent Date`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Crummey Sent</label>
+                  <select 
+                    defaultValue={editRec.crummeySent ? 'yes' : 'no'} 
+                    onChange={e => {
+                      const newValue = e.currentTarget.value === 'yes';
+                      if (newValue !== editRec.crummeySent) {
+                        update(editRec.id, { crummeySent: newValue });
+                        logActivity('edit', `Updated Crummey Sent Status`);
+                      }
+                    }} 
+                    className="border rounded p-1 w-full"
+                  >
                     <option value="no">No</option>
                     <option value="yes">Yes</option>
                   </select>
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Notes</label>
+                  <Input defaultValue={editRec.notes || ''} onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.notes || '')) {
+                      update(editRec.id, { notes: newValue });
+                      logActivity('edit', `Updated Notes`);
+                    }
+                  }} />
                 </div>
               </div>
               <div className="mt-4 flex justify-end gap-2">
