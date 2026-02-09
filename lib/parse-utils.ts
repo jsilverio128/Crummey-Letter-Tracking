@@ -31,17 +31,19 @@ function parseString(value: any): string {
   return String(value ?? '').trim();
 }
 
-function parseBoolean(value: any): boolean {
-  if (typeof value === 'boolean') return value;
-  const str = String(value).toLowerCase().trim();
-  return str === 'true' || str === 'yes' || str === '1';
-}
-
-function calculateCrummeyLetterSendDate(premiumDueDate: string | undefined, leadDays: number = 35): string | undefined {
+function calculateCrummeyLetterSendDate(premiumDueDate: string | undefined, leadDays: number = 30): string | undefined {
   if (!premiumDueDate) return undefined;
   const due = new Date(premiumDueDate + 'T00:00:00');
   if (isNaN(due.getTime())) return undefined;
   due.setDate(due.getDate() - leadDays);
+  return due.toISOString().split('T')[0];
+}
+
+function calculateGiftDate(premiumDueDate: string | undefined): string | undefined {
+  if (!premiumDueDate) return undefined;
+  const due = new Date(premiumDueDate + 'T00:00:00');
+  if (isNaN(due.getTime())) return undefined;
+  due.setDate(due.getDate() - 1);
   return due.toISOString().split('T')[0];
 }
 
@@ -68,12 +70,18 @@ function determineStatus(record: any): PolicyStatus {
     if (daysUntilSend <= 7) return 'Due Soon';
   }
 
-  // Fallback: if due within 35 days mark Pending
-  if (daysUntilDue <= 35) return 'Pending';
+  // Fallback: if due within 30 days mark Pending
+  if (daysUntilDue <= 30) return 'Pending';
   return 'Pending';
 }
 
-export function normalizeRowToRecord(row: Record<string, any>, leadDays: number = 35): ILITPolicyRecord {
+/**
+ * Normalize an uploaded row to an ILITPolicyRecord with camelCase names.
+ * Flexible column mapping to support various Excel formats.
+ * @param row Row data from Excel (with original column names)
+ * @param leadDays Days before premium due date to send Crummey letter (from settings)
+ */
+export function normalizeRowToRecord(row: Record<string, any>, leadDays: number = 30): ILITPolicyRecord {
   const now = new Date().toISOString();
   
   // Parse amounts
@@ -81,7 +89,14 @@ export function normalizeRowToRecord(row: Record<string, any>, leadDays: number 
   
   // Parse dates
   const premiumDueDate = parseDate(row['premiumDueDate'] ?? row['DueDate'] ?? row['premium_date'] ?? row['PremiumDue'] ?? row['PremiumDueDate']);
-  const giftDate = parseDate(row['giftDate'] ?? row['GiftDate'] ?? row['Gift Date']);
+  
+  // Initialize with user-provided gift date, but we don't rely on it
+  let giftDate = parseDate(row['giftDate'] ?? row['GiftDate'] ?? row['Gift Date']);
+  // If not provided, compute it: premium_due_date - 1 day
+  if (!giftDate && premiumDueDate) {
+    giftDate = calculateGiftDate(premiumDueDate);
+  }
+  
   const crummeyLetterSentDate = parseDate(row['crummeyLetterSentDate'] ?? row['CrummeyLetterSentDate'] ?? row['LetterSentDate']);
   
   // Auto-calculate crummeyLetterSendDate if not provided, using leadDays setting
@@ -93,30 +108,20 @@ export function normalizeRowToRecord(row: Record<string, any>, leadDays: number 
   // Parse trust/ILIT name (prefer ilitName, fall back to trustName)
   const ilitName = parseString(row['ilitName'] ?? row['ILIT Name'] ?? row['trustName'] ?? row['Trust'] ?? row['TrustName'] ?? '');
   
-  // Build the record
+  // Build the record with only fields that exist in Supabase schema
   const record: any = {
-    id: String(row['id'] ?? row['ID'] ?? Math.random().toString(36).slice(2, 9)),
+    id: String(row['id'] ?? row['ID'] ?? 'temp-' + Math.random().toString(36).slice(2, 9)), // Temp ID, will get UUID from DB
     ilitName,
     insuredName: parseString(row['insuredName'] ?? row['InsuredName'] ?? row['Insured'] ?? row['Insured Name']),
     trustees: parseString(row['trustees'] ?? row['Trustees']),
-    policyName: parseString(row['policyName'] ?? row['PolicyName'] ?? row['Policy Name']),
-    policyNumber: parseString(row['policyNumber'] ?? row['PolicyNumber'] ?? row['Policy Number']),
-    accountNumber: parseString(row['accountNumber'] ?? row['Account'] ?? row['AccountNumber']),
-    policyType: parseString(row['policyType'] ?? row['PolicyType'] ?? row['Policy Type']),
     insuranceCompany: parseString(row['insuranceCompany'] ?? row['Company'] ?? row['InsuranceCompany']),
-    beneficiary: parseString(row['beneficiary'] ?? row['Beneficiary']),
-    paymentFrequency: parseString(row['paymentFrequency'] ?? row['Frequency'] ?? row['PaymentFrequency']),
+    policyNumber: parseString(row['policyNumber'] ?? row['PolicyNumber'] ?? row['Policy Number']),
+    frequency: parseString(row['frequency'] ?? row['Frequency'] ?? row['paymentFrequency'] ?? row['PaymentFrequency']),
     premiumAmount: premium,
     premiumDueDate,
-    giftDate,
+    giftDate: giftDate || null,
     crummeyLetterSendDate: crummeyLetterSendDate || null,
     crummeyLetterSentDate: crummeyLetterSentDate || null,
-    crummeyRequired: row['crummeyRequired'] === undefined ? true : parseBoolean(row['crummeyRequired']),
-    crummeySent: parseBoolean(row['crummeySent'] ?? false),
-    crummeyMethod: parseString(row['crummeyMethod'] ?? row['CrummeyMethod'] ?? row['Method']),
-    crummeyRecipients: parseString(row['crummeyRecipients'] ?? row['Recipients']),
-    crummeyProofLink: parseString(row['crummeyProofLink'] ?? row['ProofLink'] ?? row['Proof']),
-    notes: parseString(row['notes'] ?? row['Notes']),
     createdAt: now,
     updatedAt: now
   };
@@ -127,6 +132,6 @@ export function normalizeRowToRecord(row: Record<string, any>, leadDays: number 
   return record as ILITPolicyRecord;
 }
 
-export function rowsToRecords(rows: Record<string, any>[], leadDays: number = 35) {
+export function rowsToRecords(rows: Record<string, any>[], leadDays: number = 30) {
   return rows.map(row => normalizeRowToRecord(row, leadDays));
 }

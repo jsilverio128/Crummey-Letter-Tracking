@@ -8,19 +8,18 @@ export async function GET() {
     // Main data sheet
     const worksheet = workbook.addWorksheet('ILIT Template');
 
-    // Column definitions matching the core fields
+    // Column definitions - ONLY required/standard fields for Supabase
+    // Gift date is computed (premium_due_date - 1), so not needed as user input
+    // Status is computed, crummey dates are optional/computed
     const columns = [
       { header: 'ilitName', key: 'ilitName', width: 20 },
       { header: 'insuredName', key: 'insuredName', width: 20 },
       { header: 'trustees', key: 'trustees', width: 25 },
-      { header: 'policyNumber', key: 'policyNumber', width: 15 },
       { header: 'insuranceCompany', key: 'insuranceCompany', width: 20 },
-      { header: 'paymentFrequency', key: 'paymentFrequency', width: 15 },
+      { header: 'policyNumber', key: 'policyNumber', width: 15 },
+      { header: 'frequency', key: 'frequency', width: 15 },
       { header: 'premiumDueDate', key: 'premiumDueDate', width: 15 },
       { header: 'premiumAmount', key: 'premiumAmount', width: 15 },
-      { header: 'giftDate', key: 'giftDate', width: 15 },
-      { header: 'crummeyLetterSendDate', key: 'crummeyLetterSendDate', width: 22 },
-      { header: 'crummeyLetterSentDate', key: 'crummeyLetterSentDate', width: 22 },
     ];
 
     worksheet.columns = columns;
@@ -31,144 +30,122 @@ export async function GET() {
     worksheet.getRow(1).alignment = { horizontal: 'center', vertical: 'middle', wrapText: true };
 
     // Add example rows with realistic fake data
-    // Note: giftDate will be set with formulas (premiumDueDate - 1)
     const exampleRows = [
       {
         ilitName: 'Smith Family ILIT',
         insuredName: 'John Smith',
         trustees: 'Jane Smith; Robert Smith',
-        policyNumber: 'UL-2024-001',
         insuranceCompany: 'MetLife',
-        paymentFrequency: 'Annual',
+        policyNumber: 'UL-2024-001',
+        frequency: 'Annual',
         premiumDueDate: '03/15/2026',
         premiumAmount: 2500,
-        giftDate: -1, // Will be replaced with formula
-        crummeyLetterSendDate: '02/08/2026',
-        crummeyLetterSentDate: '',
       },
       {
         ilitName: 'Johnson Estate ILIT',
         insuredName: 'Mary Johnson',
         trustees: 'David Johnson',
-        policyNumber: 'WL-2023-042',
         insuranceCompany: 'Northwestern Mutual',
-        paymentFrequency: 'Monthly',
+        policyNumber: 'WL-2023-042',
+        frequency: 'Monthly',
         premiumDueDate: '02/28/2026',
         premiumAmount: 450,
-        giftDate: -1, // Will be replaced with formula
-        crummeyLetterSendDate: '01/24/2026',
-        crummeyLetterSentDate: '01/25/2026',
+      },
+      {
+        ilitName: '',
+        insuredName: '',
+        trustees: '',
+        insuranceCompany: '',
+        policyNumber: '',
+        frequency: '',
+        premiumDueDate: '',
+        premiumAmount: '',
       },
     ];
 
-    // Add rows and then set formulas for giftDate
-    let rowNum = 2;
-    exampleRows.forEach((row) => {
-      const addRow: Record<string, any> = { ...row };
-      delete addRow.giftDate; // Don't add the placeholder value
+    // Add rows and format them
+    exampleRows.forEach((row, idx) => {
       worksheet.addRow(row);
-      worksheet.addRow(addRow);
       
-      // Set giftDate formula: =G2-1 (where G is premiumDueDate column)
-      // premiumDueDate is column G (7th column)
-      const giftDateCell = worksheet.getCell(`I${rowNum}`); // I is the 9th column (giftDate)
-      giftDateCell.value = { formula: `=G${rowNum}-1` };
-      giftDateCell.numFmt = 'mm/dd/yyyy';
+      const rowNum = idx + 2; // +2 because row 1 is header and arrays are 0-indexed
+      const currentRow = worksheet.getRow(rowNum);
       
-      rowNum++;
+      currentRow.eachCell((cell, colNumber) => {
+        cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
+        
+        // Format date columns (G = premiumDueDate)
+        if (colNumber === 7) {
+          cell.numFmt = 'mm/dd/yyyy';
+        }
+        // Format amount column (H = premiumAmount)
+        if (colNumber === 8) {
+          cell.numFmt = '#,##0.00';
+        }
+      });
     });
 
-    // Format data rows
-    worksheet.eachRow((row, rowNumber) => {
-      if (rowNumber > 1) {
-        row.eachCell((cell, colNumber) => {
-          cell.alignment = { horizontal: 'left', vertical: 'middle', wrapText: false };
-                  // Format date columns (D=premiumDueDate, I=giftDate, J=crummeyLetterSendDate, K=crummeyLetterSentDate)
-                  if ([7, 9, 10, 11].includes(colNumber)) {
-                    cell.numFmt = 'mm/dd/yyyy';
-                  }
-                  // Format amount column (H=premiumAmount)
-                  if (colNumber === 8) {
-                    cell.numFmt = '#,##0.00';
-                  }
-        });
-      }
-    });
-
-    // Add notes/instructions sheet
-    const notesSheet = workbook.addWorksheet('Notes');
-    notesSheet.columns = [{ width: 80 }];
+    // Add instructions sheet
+    const instructionsSheet = workbook.addWorksheet('Instructions');
+    instructionsSheet.columns = [{ width: 80 }];
     
-    const notes = [
-      'EXCEL TEMPLATE - FORMAT INSTRUCTIONS',
+    const instructions = [
+      'ILIT POLICY TEMPLATE - INSTRUCTIONS',
       '',
-      'COLUMNS IN THIS TEMPLATE:',
-      '• ilitName: Name of the ILIT or Trust (REQUIRED)',
-      '• insuredName: Name of the insured person',
-      '• trustees: Names of trustees (separate multiple with ; or ,)',
-      '• policyNumber: Policy number from insurance company',
-      '• insuranceCompany: Insurance company name',
-      '• paymentFrequency: How often premium is due (Annual, Monthly, Quarterly, etc.)',
-      '• premiumDueDate: When the next premium is due',
-      '• premiumAmount: Amount of the premium payment',
-      '• giftDate: Date the policy was gifted (auto-calculated as 1 day before premium due date)',
-      '• crummeyLetterSendDate: When to send the Crummey letter',
-      '• crummeyLetterSentDate: When the Crummey letter was actually sent',
+      'REQUIRED FIELDS:',
+      '• ilitName - Name of the ILIT/Trust (REQUIRED)',
+      '',
+      'OPTIONAL FIELDS:',
+      '• insuredName - Name of the insured person',
+      '• trustees - Names of trustees, separated by semicolons (;)',
+      '  Example: Jane Smith; Robert Smith',
+      '• insuranceCompany - Name of the insurance company',
+      '• policyNumber - Policy number or identifier',
+      '• frequency - Payment frequency (Annual, Monthly, Quarterly, etc.)',
+      '• premiumDueDate - Date the premium is due (mm/dd/yyyy format)',
+      '• premiumAmount - Premium amount in dollars (do NOT include $ signs)',
+      '',
+      'AUTO-CALCULATED FIELDS:',
+      '• giftDate - Automatically calculated as one day before premium due date',
+      '• crummeyLetterSendDate - Automatically calculated based on reminder settings',
+      '  (Default: 30 days before premium due date)',
+      '',
+      'HOW TO USE:',
+      '1. Download this template',
+      '2. Fill in your ILIT policy information',
+      '3. Delete the example rows (rows 2-3) when done',
+      '4. Save the file as .xlsx format',
+      '5. Upload to the app through the Dashboard',
       '',
       'DATE FORMAT:',
-      '• Dates should be in MM/DD/YYYY format (e.g., 03/15/2026)',
-      '• Alternatively, you can use Excel date values',
-      '• Empty date cells will be skipped',
-      '',
-      'AMOUNT FORMAT:',
-      '• Premiums should be entered as numbers (e.g., 2500 or 2500.50)',
-      '• Do NOT include $ signs or commas',
-      '',
-      'GIFT DATE:',
-      '• The example rows use a formula to calculate Gift Date',
-      '• Gift Date = Premium Due Date - 1 day',
-      '• You can delete the example rows and add your own',
-      '',
-      'TRUSTEES:',
-      '• Separate multiple trustees with semicolons (;) or commas (,)',
-      '• Example: Jane Smith; Robert Smith',
-      '',
-      'PAYMENT FREQUENCY:',
-      '• Examples: Annual, Semi-Annual, Quarterly, Monthly, Bi-Weekly, Weekly',
-      '',
-      'IMPORT:',
-      '• All fields except ilitName are optional',
-      '• Download this template, fill in your data, and upload to the app',
-      '• You can also upload older spreadsheets with different column names',
+      '• Use MM/DD/YYYY format (e.g., 03/15/2026)',
+      '• Or paste dates from Excel (will be auto-formatted)',
       '',
       'TIPS:',
-      '• You can copy/paste data from your existing spreadsheets',
-      '• Delete the example rows and add your own data',
-      '• The app will auto-calculate "crummeyLetterSendDate" if not provided',
-      '  using your configured reminder lead time (default 35 days)',
+      '• You can copy/paste data from existing spreadsheets',
+      '• All fields except ilitName are optional',
+      '• The app is flexible with column names and will map them automatically',
+      '• Changing reminder settings will recalculate crummey letter dates',
     ];
 
-    notes.forEach((line) => {
-      const row = notesSheet.addRow([line]);
+    instructions.forEach((line) => {
+      const row = instructionsSheet.addRow([line]);
       if (line.includes(':') && !line.startsWith(' ') && line !== '') {
-        row.font = { bold: true };
+        row.font = { bold: true, size: 11 };
       }
     });
 
     // Generate Excel file
     const buffer = await workbook.xlsx.writeBuffer();
     
-    const response = new NextResponse(buffer, {
+    return new Response(buffer, {
       status: 200,
       headers: {
         'Content-Type': 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
         'Content-Disposition': 'attachment; filename="ILIT-Template.xlsx"',
       },
     });
-
-    return response;
-  } catch (error) {
-    console.error('Template generation error:', error);
-    return NextResponse.json({ error: 'Failed to generate template' }, { status: 500 });
+  } catch (e: any) {
+    console.error('Template generation error:', e);
+    return NextResponse.json({ error: String(e.message ?? e) }, { status: 500 });
   }
 }

@@ -28,16 +28,24 @@ export default function SettingsPage() {
       return;
     }
 
-    updateReminderLeadDays(localLeadDays);
-    setIsSaved(true);
-    toaster.push({
-      id: Date.now().toString(),
-      message: `Reminder lead time set to ${localLeadDays} days`,
-      type: 'success'
-    });
-
-    // Reset the "saved" indicator after 3 seconds
-    setTimeout(() => setIsSaved(false), 3000);
+    updateReminderLeadDays(localLeadDays)
+      .then(() => {
+        setIsSaved(true);
+        toaster.push({
+          id: Date.now().toString(),
+          message: `Reminder lead time set to ${localLeadDays} days`,
+          type: 'success'
+        });
+        setTimeout(() => setIsSaved(false), 3000);
+      })
+      .catch((err) => {
+        toaster.push({
+          id: Date.now().toString(),
+          message: 'Failed to save settings',
+          type: 'error'
+        });
+        console.error('Settings save error:', err);
+      });
   }
 
   function handleReset() {

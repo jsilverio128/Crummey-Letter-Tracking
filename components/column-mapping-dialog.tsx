@@ -20,17 +20,11 @@ const FIELD_GROUPS = {
   'Policy Details': [
     'policyNumber',
     'insuranceCompany',
-    'paymentFrequency',
+    'frequency',
   ],
   'Dates & Amount': [
     'premiumDueDate',
     'premiumAmount',
-    'giftDate',
-    'crummeyLetterSendDate',
-    'crummeyLetterSentDate',
-  ],
-  'Notes': [
-    'notes',
   ],
 };
 

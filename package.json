@@ -9,6 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
+    "@supabase/supabase-js": "^2.95.3",
     "@types/pdfkit": "^0.17.4",
     "clsx": "^1.2.1",
     "exceljs": "^4.3.0",

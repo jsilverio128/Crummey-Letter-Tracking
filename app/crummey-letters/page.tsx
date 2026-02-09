@@ -90,8 +90,7 @@ export default function CrummeyLettersPage() {
       setIsMarking(record.id);
       const today = new Date().toISOString().split('T')[0];
 
-      update(record.id, {
-        crummeySent: true,
+      await update(record.id, {
         crummeyLetterSentDate: today,
         status: 'Letter Sent' as const,
       });
@@ -160,7 +159,7 @@ export default function CrummeyLettersPage() {
                   {displayedLetters.map((item) => {
                     const record = item.policy;
                     const daysFromToday = getDaysFromToday(record.crummeyLetterSendDate);
-                    const isPending = !record.crummeySent && record.status !== 'Letter Sent';
+                    const isPending = !record.crummeyLetterSentDate && record.status !== 'Letter Sent';
                     const isOverdue = daysFromToday !== null && daysFromToday < 0;
 
                     return (

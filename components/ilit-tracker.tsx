@@ -4,8 +4,6 @@ import { useSearchParams } from 'next/navigation';
 import { usePortalData } from '../hooks/use-portal-data';
 import { useActivity } from '../hooks/use-activity';
 import { useSettings } from '../hooks/use-settings';
-import { ColumnMappingDialog } from './column-mapping-dialog';
-import { rowsToRecords } from '../lib/parse-utils';
 import { Button } from './ui/button';
 import { Card } from './ui/card';
 import { Table, THead, TBody } from './ui/table';
@@ -29,9 +27,9 @@ function statusFor(record: any) {
     return { label: record.status, color: statusColorMap[record.status] || 'blue' };
   }
   
-  // Legacy: infer from crummeySent
+  // Fallback to crummeyLetterSentDate
   const today = new Date();
-  if (record.crummeySent) return { label: 'Letter Sent', color: 'green' };
+  if (record.crummeyLetterSentDate) return { label: 'Letter Sent', color: 'green' };
   if (!record.premiumDueDate) return { label: 'Not Started', color: 'gray' };
   const due = new Date(record.premiumDueDate + 'T00:00:00');
   const diff = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
@@ -71,8 +69,6 @@ export function ILITTracker() {
   const { policies: records, addMany, update, remove, clear } = usePortalData();
   const { log: logActivity } = useActivity();
   const { reminderLeadDays } = useSettings();
-  const [mappingOpen, setMappingOpen] = useState(false);
-  const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [filter, setFilter] = useState('');
   const searchParams = useSearchParams();
@@ -88,7 +84,6 @@ export function ILITTracker() {
     const f = e.target.files?.[0];
     if (!f) return;
     if (!f.name.toLowerCase().endsWith('.xlsx')) {
-      // reject .xls and other types
       toaster.push({ id: Date.now().toString(), message: 'Please upload .xlsx files only', type: 'error' });
       if (fileRef.current) fileRef.current.value = '';
       return;
@@ -96,31 +91,41 @@ export function ILITTracker() {
     const form = new FormData();
     form.append('file', f);
     try {
-      const res = await fetch('/api/upload-excel', { method: 'POST', body: form });
+      // Use the new Supabase-backed upload endpoint
+      const res = await fetch(`/api/ilit/upload?leadDays=${reminderLeadDays}`, {
+        method: 'POST',
+        body: form
+      });
       if (!res.ok) {
-        const txt = await res.text();
-        toaster.push({ id: Date.now().toString(), message: 'Upload failed: ' + txt, type: 'error' });
+        const json = await res.json();
+        toaster.push({
+          id: Date.now().toString(),
+          message: `Upload failed: ${json.error || 'Unknown error'}`,
+          type: 'error'
+        });
         return;
       }
       const json = await res.json();
-      const rows = (json.rawData ?? []) as Record<string, any>[];
-      setSampleRows(rows.slice(0, 10));
-      setMappingOpen(true);
-    } catch (err) {
-      toaster.push({ id: Date.now().toString(), message: 'Upload failed', type: 'error' });
-    }
-  }
+      const inserted = json.inserted || 0;
+      
+      if (inserted > 0) {
+        toaster.push({
+          id: Date.now().toString(),
+          message: `Successfully imported ${inserted} policies`,
+          type: 'success'
+        });
+      } else {
+        toaster.push({
+          id: Date.now().toString(),
+          message: 'No data was imported',
+          type: 'error'
+        });
+      }
 
-  function handleImport(mappedRows: Record<string, any>[]) {
-    try {
-      const records = rowsToRecords(mappedRows, reminderLeadDays);
-      addMany(records);
-      logActivity('import', `Imported ${records.length} record${records.length !== 1 ? 's' : ''}`);
-      // reset file input so same filename can be selected again
       if (fileRef.current) fileRef.current.value = '';
-      toaster.push({ id: Date.now().toString(), message: 'Imported ' + records.length + ' records', type: 'success' });
-    } catch (e) {
-      toaster.push({ id: Date.now().toString(), message: 'Import failed', type: 'error' });
+    } catch (err) {
+      console.error('Upload error:', err);
+      toaster.push({ id: Date.now().toString(), message: 'Upload failed', type: 'error' });
     }
   }
 
@@ -202,7 +207,7 @@ export function ILITTracker() {
                       <td className="p-2 text-gray-700">{r.trustees ? r.trustees.split(/[;,]/).map(t => t.trim()).join(', ') : '—'}</td>
                       <td className="p-2 text-gray-700">{r.policyNumber || '—'}</td>
                                             <td className="p-2 text-gray-700">{r.insuranceCompany || '—'}</td>
-                                            <td className="p-2 text-gray-700">{r.paymentFrequency || '—'}</td>
+                                            <td className="p-2 text-gray-700">{r.frequency || '—'}</td>
                       <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
                       <td className="p-2 text-right">{r.premiumAmount ? `$${r.premiumAmount.toLocaleString()}` : '—'}</td>
                       <td className="p-2">{formatDateMMDD(r.giftDate)}</td>
@@ -211,7 +216,7 @@ export function ILITTracker() {
                       <td className="p-2 flex gap-1">
                         <Button onClick={() => setEditRec(r)} className="text-xs px-2 py-1">Edit</Button>
                         <Button onClick={() => { 
-                          update(r.id, { crummeySent: true, crummeyLetterSentDate: new Date().toISOString().slice(0,10), status: 'Letter Sent' });
+                          update(r.id, { crummeyLetterSentDate: new Date().toISOString().slice(0,10), status: 'Letter Sent' });
                           logActivity('letter_sent', `Marked letter sent for ${displayName}`);
                         }} className="text-xs px-2 py-1">Sent</Button>
                       </td>
@@ -222,8 +227,6 @@ export function ILITTracker() {
             </Table>
           </div>
         </Card>
-
-        <ColumnMappingDialog open={mappingOpen} sampleRows={sampleRows} onClose={() => setMappingOpen(false)} onImport={handleImport} />
 
         <Dialog open={!!editRec} onClose={() => setEditRec(null)}>
           {editRec && (
@@ -284,10 +287,10 @@ export function ILITTracker() {
                 </div>
                 <div>
                   <label className="text-xs font-medium">Payment Frequency</label>
-                  <Input defaultValue={editRec.paymentFrequency || ''} placeholder="e.g., Annual, Monthly" onBlur={e => {
+                  <Input defaultValue={editRec.frequency || ''} placeholder="e.g., Annual, Monthly" onBlur={e => {
                     const newValue = e.currentTarget.value;
-                    if (newValue !== (editRec.paymentFrequency || '')) {
-                      update(editRec.id, { paymentFrequency: newValue });
+                    if (newValue !== (editRec.frequency || '')) {
+                      update(editRec.id, { frequency: newValue });
                       logActivity('edit', `Updated Payment Frequency`);
                     }
                   }} />
@@ -371,11 +374,12 @@ export function ILITTracker() {
                 <div>
                   <label className="text-xs font-medium">Crummey Sent</label>
                   <select 
-                    defaultValue={editRec.crummeySent ? 'yes' : 'no'} 
+                    defaultValue={editRec.crummeyLetterSentDate ? 'yes' : 'no'} 
                     onChange={e => {
-                      const newValue = e.currentTarget.value === 'yes';
-                      if (newValue !== editRec.crummeySent) {
-                        update(editRec.id, { crummeySent: newValue });
+                      const isYes = e.currentTarget.value === 'yes';
+                      const dateValue = isYes ? new Date().toISOString().split('T')[0] : null;
+                      if (isYes !== !!editRec.crummeyLetterSentDate) {
+                        update(editRec.id, { crummeyLetterSentDate: dateValue });
                         logActivity('edit', `Updated Crummey Sent Status`);
                       }
                     }} 
@@ -384,16 +388,6 @@ export function ILITTracker() {
                     <option value="no">No</option>
                     <option value="yes">Yes</option>
                   </select>
-                </div>
-                <div>
-                  <label className="text-xs font-medium">Notes</label>
-                  <Input defaultValue={editRec.notes || ''} onBlur={e => {
-                    const newValue = e.currentTarget.value;
-                    if (newValue !== (editRec.notes || '')) {
-                      update(editRec.id, { notes: newValue });
-                      logActivity('edit', `Updated Notes`);
-                    }
-                  }} />
                 </div>
               </div>
               <div className="mt-4 flex justify-end gap-2">

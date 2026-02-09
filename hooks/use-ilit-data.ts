@@ -1,64 +1,85 @@
 "use client";
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { ILITPolicyRecord } from '../lib/types';
-import * as store from '../lib/data-store';
 
+/**
+ * Custom hook to fetch and manage ILIT policies from Supabase backend.
+ * Provides real-time access to policy data across the entire app.
+ */
 export function useILITData() {
   const [records, setRecords] = useState<ILITPolicyRecord[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
-  useEffect(() => {
-    setRecords(store.loadAll());
-
-    function onUpdate() {
-      try {
-        const next = store.loadAll();
-        setRecords(prev => {
-          try {
-            if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
-          } catch (e) {}
-          return next;
-        });
-      } catch (e) {}
+  // Fetch policies from API
+  const fetchPolicies = useCallback(async () => {
+    try {
+      setIsLoading(true);
+      setError(null);
+      const response = await fetch('/api/ilit/policies');
+      if (!response.ok) {
+        throw new Error('Failed to fetch policies');
+      }
+      const data = await response.json();
+      setRecords(Array.isArray(data) ? data : []);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      setError(message);
+      console.error('Failed to fetch policies:', err);
+    } finally {
+      setIsLoading(false);
     }
-
-    // listen for custom events when other parts of app update the store
-    window.addEventListener('ilit-data-updated', onUpdate as any);
-    // also listen for storage events (cross-tab)
-    window.addEventListener('storage', onUpdate as any);
-
-    return () => {
-      window.removeEventListener('ilit-data-updated', onUpdate as any);
-      window.removeEventListener('storage', onUpdate as any);
-    };
   }, []);
 
+  // Initial fetch
   useEffect(() => {
-    store.saveAll(records);
-  }, [records]);
+    fetchPolicies();
+  }, [fetchPolicies]);
 
-  function addMany(newRecords: ILITPolicyRecord[]) {
-    setRecords(prev => {
-      const merged = [...newRecords, ...prev];
-      return merged;
-    });
-  }
+  // Update a single policy
+  const update = useCallback(async (id: string, updates: Partial<ILITPolicyRecord>) => {
+    try {
+      const response = await fetch(`/api/ilit/policies/${id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(updates)
+      });
+      if (!response.ok) {
+        throw new Error('Failed to update policy');
+      }
+      const updated = await response.json();
+      setRecords(prev => prev.map(r => r.id === id ? updated : r));
+      return updated;
+    } catch (err) {
+      console.error('Failed to update policy:', err);
+      throw err;
+    }
+  }, []);
 
-  function update(id: string, patch: Partial<ILITPolicyRecord>) {
-    setRecords(prev => prev.map(r => (r.id === id ? { ...r, ...patch, updatedAt: new Date().toISOString() } : r)));
-  }
+  // Add multiple policies (used after upload)
+  const addMany = useCallback(async (newRecords: ILITPolicyRecord[]) => {
+    // After upload, refresh the list to get the newly inserted records from the server
+    await fetchPolicies();
+  }, [fetchPolicies]);
 
-  function remove(id: string) {
-    setRecords(prev => prev.filter(r => r.id !== id));
-  }
+  // Remove a policy
+  const remove = useCallback(async (id: string) => {
+    await fetchPolicies();
+  }, [fetchPolicies]);
 
-  function replaceAll(next: ILITPolicyRecord[]) {
-    setRecords(next);
-  }
+  // Clear all policies
+  const clear = useCallback(async () => {
+    await fetchPolicies();
+  }, [fetchPolicies]);
 
-  function clear() {
-    store.clearAll();
-    setRecords([]);
-  }
-
-  return { records, addMany, update, remove, replaceAll, clear };
+  return {
+    records,
+    isLoading,
+    error,
+    update,
+    addMany,
+    remove,
+    clear,
+    refresh: fetchPolicies
+  };
 }
