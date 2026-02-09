@@ -80,6 +80,7 @@ export default function SettingsPage() {
                 />
                 <span className="text-sm text-gray-700 font-medium">days</span>
               </div>
+              <span className="text-xs text-gray-500">1 day minimum</span>
               <div className="ml-4 p-3 bg-white border border-gray-200 rounded">
                 <p className="text-xs text-gray-600">Current setting:</p>
                 <p className="text-lg font-bold text-slate-900">{localLeadDays} days</p>

@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 import { usePathname } from 'next/navigation';
 import { Button } from './ui/button';
+import { Tooltip } from './ui/tooltip';
 
 const NAV_ITEMS = [
   { href: '/dashboard', label: 'Dashboard', icon: '📊' },
@@ -57,7 +58,13 @@ export function Sidebar({ isOpen = true, onClose }: SidebarProps) {
                     : 'hover:bg-slate-800'
                 }`}
               >
-                <span className="text-lg">{item.icon}</span>
+                {collapsed ? (
+                  <Tooltip content={item.label} side="right">
+                    <span className="text-lg">{item.icon}</span>
+                  </Tooltip>
+                ) : (
+                  <span className="text-lg">{item.icon}</span>
+                )}
                 {!collapsed && <span className="truncate">{item.label}</span>}
               </div>
             </Link>

@@ -1,5 +1,6 @@
 "use client";
-import React, { useMemo, useRef, useState } from 'react';
+import React, { useMemo, useRef, useState, useEffect } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { useILITData } from '../hooks/use-ilit-data';
 import { useActivity } from '../hooks/use-activity';
 import { useSettings } from '../hooks/use-settings';
@@ -19,6 +20,7 @@ function statusFor(record: any) {
     const statusColorMap: Record<string, string> = {
       'Paid': 'green',
       'Letter Sent': 'green',
+      'Letter Due': 'orange',
       'Due Soon': 'orange',
       'Overdue': 'red',
       'Pending': 'blue',
@@ -73,6 +75,11 @@ export function ILITTracker() {
   const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
   const fileRef = useRef<HTMLInputElement | null>(null);
   const [filter, setFilter] = useState('');
+  const searchParams = useSearchParams();
+  useEffect(() => {
+    const clientParam = searchParams?.get('client') || '';
+    if (clientParam) setFilter(clientParam);
+  }, [searchParams]);
   const [sortBy, setSortBy] = useState<'trust' | 'due' | 'amount' | null>(null);
   const [editRec, setEditRec] = useState<any>(null);
   const toaster = useToaster();
@@ -139,6 +146,12 @@ export function ILITTracker() {
           <div className="flex gap-2">
             <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFile} className="hidden" />
             <Button onClick={() => fileRef.current?.click()}>Upload Excel</Button>
+            <Button onClick={() => {
+              const link = document.createElement('a');
+              link.href = '/api/template/ilit';
+              link.download = 'ILIT-Template.xlsx';
+              link.click();
+            }}>Download Template</Button>
             <Button onClick={() => { exportCSV(records); }}>Export All CSV</Button>
             <Button onClick={() => {
                 // fully clear stored data and UI state
@@ -169,6 +182,8 @@ export function ILITTracker() {
                   <th className="p-2">Insured</th>
                   <th className="p-2">Trustees</th>
                   <th className="p-2">Policy</th>
+                                    <th className="p-2">Company</th>
+                                    <th className="p-2">Frequency</th>
                   <th className="p-2">Premium Due</th>
                   <th className="p-2">Amount</th>
                   <th className="p-2">Gift Date</th>
@@ -186,6 +201,8 @@ export function ILITTracker() {
                       <td className="p-2 text-gray-700">{r.insuredName || '—'}</td>
                       <td className="p-2 text-gray-700">{r.trustees ? r.trustees.split(/[;,]/).map(t => t.trim()).join(', ') : '—'}</td>
                       <td className="p-2 text-gray-700">{r.policyNumber || '—'}</td>
+                                            <td className="p-2 text-gray-700">{r.insuranceCompany || '—'}</td>
+                                            <td className="p-2 text-gray-700">{r.paymentFrequency || '—'}</td>
                       <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
                       <td className="p-2 text-right">{r.premiumAmount ? `$${r.premiumAmount.toLocaleString()}` : '—'}</td>
                       <td className="p-2">{formatDateMMDD(r.giftDate)}</td>
@@ -244,17 +261,6 @@ export function ILITTracker() {
                     }
                   }} />
                 </div>
-                <div>
-                  <label className="text-xs font-medium">Policy Name</label>
-                  <Input defaultValue={editRec.policyName || ''} onBlur={e => {
-                    const newValue = e.currentTarget.value;
-                    if (newValue !== (editRec.policyName || '')) {
-                      update(editRec.id, { policyName: newValue });
-                      logActivity('edit', `Updated Policy Name`);
-                    }
-                  }} />
-                </div>
-                
                 {/* Policy Details */}
                 <div>
                   <label className="text-xs font-medium">Policy Number</label>
@@ -273,6 +279,16 @@ export function ILITTracker() {
                     if (newValue !== (editRec.insuranceCompany || '')) {
                       update(editRec.id, { insuranceCompany: newValue });
                       logActivity('edit', `Updated Insurance Company`);
+                    }
+                  }} />
+                </div>
+                <div>
+                  <label className="text-xs font-medium">Payment Frequency</label>
+                  <Input defaultValue={editRec.paymentFrequency || ''} placeholder="e.g., Annual, Monthly" onBlur={e => {
+                    const newValue = e.currentTarget.value;
+                    if (newValue !== (editRec.paymentFrequency || '')) {
+                      update(editRec.id, { paymentFrequency: newValue });
+                      logActivity('edit', `Updated Payment Frequency`);
                     }
                   }} />
                 </div>

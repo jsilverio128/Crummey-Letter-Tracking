@@ -5,6 +5,12 @@ const STORAGE_KEY = 'ilit_policies_v1';
 export function saveAll(records: ILITPolicyRecord[]) {
   if (typeof window === 'undefined') return;
   window.localStorage.setItem(STORAGE_KEY, JSON.stringify(records));
+  try {
+    const ev = new CustomEvent('ilit-data-updated', { detail: { count: records.length } });
+    window.dispatchEvent(ev);
+  } catch (e) {
+    // ignore
+  }
 }
 
 export function loadAll(): ILITPolicyRecord[] {
@@ -22,4 +28,10 @@ export function loadAll(): ILITPolicyRecord[] {
 export function clearAll() {
   if (typeof window === 'undefined') return;
   window.localStorage.removeItem(STORAGE_KEY);
+  try {
+    const ev = new CustomEvent('ilit-data-updated', { detail: { count: 0 } });
+    window.dispatchEvent(ev);
+  } catch (e) {
+    // ignore
+  }
 }

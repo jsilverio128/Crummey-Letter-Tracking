@@ -46,24 +46,30 @@ function calculateCrummeyLetterSendDate(premiumDueDate: string | undefined, lead
 }
 
 function determineStatus(record: any): PolicyStatus {
-  // If explicitly set, use it
-  if (record.status) return record.status;
-  
-  // Legacy: infer from crummeySent
-  if (record.crummeySent) return 'Letter Sent';
-  
-  // Infer from premium due date
+  // Compute status from dates and sent flag, do not trust incoming 'status' field
+  if (record.crummeyLetterSentDate) return 'Letter Sent';
+
   if (!record.premiumDueDate) return 'Not Started';
-  
+
   const today = new Date();
   today.setHours(0, 0, 0, 0);
   const due = new Date(record.premiumDueDate + 'T00:00:00');
   const daysUntilDue = Math.ceil((due.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-  
+
+  // Overdue
   if (daysUntilDue < 0) return 'Overdue';
-  if (daysUntilDue <= 7) return 'Due Soon';
+
+  // If there's an explicit crummeyLetterSendDate, use it to determine "Letter Due"
+  if (record.crummeyLetterSendDate) {
+    const send = new Date(record.crummeyLetterSendDate + 'T00:00:00');
+    if (send <= today) return 'Letter Due';
+    const daysUntilSend = Math.ceil((send.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysUntilSend <= 0) return 'Letter Due';
+    if (daysUntilSend <= 7) return 'Letter Due';
+  }
+
+  // Fallback: if due within 35 days mark Pending
   if (daysUntilDue <= 35) return 'Pending';
-  
   return 'Pending';
 }
 
@@ -115,8 +121,8 @@ export function normalizeRowToRecord(row: Record<string, any>, leadDays: number 
     updatedAt: now
   };
   
-  // Determine status after all fields are set
-  record.status = parseString(row['status'] ?? row['Status']) || determineStatus(record);
+  // Determine status after all fields are set (computed)
+  record.status = determineStatus(record);
   
   return record as ILITPolicyRecord;
 }

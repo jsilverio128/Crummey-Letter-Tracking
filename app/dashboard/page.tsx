@@ -1,8 +1,14 @@
 "use client";
-import React, { useMemo } from 'react';
+import React, { useMemo, useRef, useState } from 'react';
+import { useRouter } from 'next/navigation';
 import { useILITData } from '../../hooks/use-ilit-data';
 import { useActivity } from '../../hooks/use-activity';
+import { useSettings } from '../../hooks/use-settings';
 import { Card } from '../../components/ui/card';
+import { Button } from '../../components/ui/button';
+import { ColumnMappingDialog } from '../../components/column-mapping-dialog';
+import { rowsToRecords } from '../../lib/parse-utils';
+import { useToaster } from '../../components/ui/toaster';
 
 function getDaysFromToday(dateStr?: string): number | null {
   if (!dateStr) return null;
@@ -23,9 +29,63 @@ function formatDateMMDD(dateStr?: string | null) {
 }
 
 export default function DashboardPage() {
-  const { records } = useILITData();
-  const { getRecent } = useActivity();
+  const { records, addMany } = useILITData();
+  const { getRecent, log: logActivity } = useActivity();
+  const { reminderLeadDays } = useSettings();
+  const router = useRouter();
+  const fileRef = useRef<HTMLInputElement | null>(null);
+  const [mappingOpen, setMappingOpen] = useState(false);
+  const [sampleRows, setSampleRows] = useState<Record<string, any>[]>([]);
+  const toaster = useToaster();
   const recentActivities = getRecent(10);
+
+  async function handleFile(e: React.ChangeEvent<HTMLInputElement>) {
+    const f = e.target.files?.[0];
+    if (!f) return;
+    if (!f.name.toLowerCase().endsWith('.xlsx')) {
+      toaster.push({ id: Date.now().toString(), message: 'Please upload .xlsx files only', type: 'error' });
+      if (fileRef.current) fileRef.current.value = '';
+      return;
+    }
+    const form = new FormData();
+    form.append('file', f);
+    try {
+      const res = await fetch('/api/upload-excel', { method: 'POST', body: form });
+      if (!res.ok) {
+        const txt = await res.text();
+        toaster.push({ id: Date.now().toString(), message: 'Upload failed: ' + txt, type: 'error' });
+        return;
+      }
+      const json = await res.json();
+      const rows = (json.rawData ?? []) as Record<string, any>[];
+      setSampleRows(rows.slice(0, 10));
+      setMappingOpen(true);
+    } catch (err) {
+      toaster.push({ id: Date.now().toString(), message: 'Upload failed', type: 'error' });
+    }
+  }
+
+  function handleImport(mappedRows: Record<string, any>[]) {
+    try {
+      const newRecords = rowsToRecords(mappedRows, reminderLeadDays);
+      addMany(newRecords);
+      logActivity('import', `Imported ${newRecords.length} record${newRecords.length !== 1 ? 's' : ''}`);
+      if (fileRef.current) fileRef.current.value = '';
+      toaster.push({ id: Date.now().toString(), message: 'Imported ' + newRecords.length + ' records', type: 'success' });
+      setMappingOpen(false);
+      // Optionally navigate to ILIT tracker to show imported data
+      // router.push('/ilit-tracker');
+    } catch (e) {
+      toaster.push({ id: Date.now().toString(), message: 'Import failed', type: 'error' });
+    }
+  }
+
+  function downloadTemplate() {
+    const link = document.createElement('a');
+    link.href = '/api/template/ilit';
+    link.download = 'ILIT-Template.xlsx';
+    link.click();
+  }
 
   const metrics = useMemo(() => {
     const today = new Date();
@@ -71,7 +131,14 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      <h2 className="text-3xl font-bold text-slate-900">Dashboard</h2>
+      <div className="flex items-center justify-between">
+        <h2 className="text-3xl font-bold text-slate-900">Dashboard</h2>
+        <div className="flex gap-2">
+          <input ref={fileRef} type="file" accept=".xlsx" onChange={handleFile} className="hidden" />
+          <Button onClick={() => fileRef.current?.click()}>Upload Excel</Button>
+          <Button onClick={downloadTemplate}>Download Template</Button>
+        </div>
+      </div>
 
       {/* Summary Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
@@ -127,6 +194,8 @@ export default function DashboardPage() {
           </div>
         )}
       </Card>
+
+      <ColumnMappingDialog open={mappingOpen} sampleRows={sampleRows} onClose={() => setMappingOpen(false)} onImport={handleImport} />
     </div>
   );
 }

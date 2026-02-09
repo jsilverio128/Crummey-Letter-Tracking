@@ -18,12 +18,8 @@ const FIELD_GROUPS = {
     'trustees',
   ],
   'Policy Details': [
-    'policyName',
     'policyNumber',
-    'accountNumber',
-    'policyType',
     'insuranceCompany',
-    'beneficiary',
     'paymentFrequency',
   ],
   'Dates & Amount': [
@@ -32,14 +28,6 @@ const FIELD_GROUPS = {
     'giftDate',
     'crummeyLetterSendDate',
     'crummeyLetterSentDate',
-  ],
-  'Crummey & Status': [
-    'crummeyRequired',
-    'crummeySent',
-    'crummeyMethod',
-    'crummeyRecipients',
-    'crummeyProofLink',
-    'status',
   ],
   'Notes': [
     'notes',

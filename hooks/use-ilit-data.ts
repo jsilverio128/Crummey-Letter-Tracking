@@ -8,6 +8,28 @@ export function useILITData() {
 
   useEffect(() => {
     setRecords(store.loadAll());
+
+    function onUpdate() {
+      try {
+        const next = store.loadAll();
+        setRecords(prev => {
+          try {
+            if (JSON.stringify(prev) === JSON.stringify(next)) return prev;
+          } catch (e) {}
+          return next;
+        });
+      } catch (e) {}
+    }
+
+    // listen for custom events when other parts of app update the store
+    window.addEventListener('ilit-data-updated', onUpdate as any);
+    // also listen for storage events (cross-tab)
+    window.addEventListener('storage', onUpdate as any);
+
+    return () => {
+      window.removeEventListener('ilit-data-updated', onUpdate as any);
+      window.removeEventListener('storage', onUpdate as any);
+    };
   }, []);
 
   useEffect(() => {
