@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useRef, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
-import { useILITData } from '../hooks/use-ilit-data';
+import { usePortalData } from '../hooks/use-portal-data';
 import { useActivity } from '../hooks/use-activity';
 import { useSettings } from '../hooks/use-settings';
 import { ColumnMappingDialog } from './column-mapping-dialog';
@@ -68,7 +68,7 @@ function exportCSV(rows: any[]) {
 }
 
 export function ILITTracker() {
-  const { records, addMany, update, remove, replaceAll, clear } = useILITData();
+  const { policies: records, addMany, update, remove, clear } = usePortalData();
   const { log: logActivity } = useActivity();
   const { reminderLeadDays } = useSettings();
   const [mappingOpen, setMappingOpen] = useState(false);

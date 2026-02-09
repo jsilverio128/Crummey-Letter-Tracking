@@ -1,6 +1,6 @@
 "use client";
 import React, { useMemo, useState } from 'react';
-import { useILITData } from '../../hooks/use-ilit-data';
+import { usePortalData } from '../../hooks/use-portal-data';
 import { useActivity } from '../../hooks/use-activity';
 import { Card } from '../../components/ui/card';
 import { Badge } from '../../components/ui/badge';
@@ -42,46 +42,28 @@ function statusBadge(status?: string) {
 }
 
 export default function RemindersPage() {
-  const { records } = useILITData();
+  const { reminders, update } = usePortalData();
   const { log: logActivity } = useActivity();
   const [crummeyFilterDays, setCrummeyFilterDays] = useState<FilterDays>(30);
   const [premiumFilterDays, setPremiumFilterDays] = useState<FilterDays>(30);
 
-  // Section 1: Crummey letters to send
   const crummeyLettersTodo = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    return reminders
+      .filter(r => r.type === 'letter' && r.daysUntilAction === 0)
+      .sort((a, b) => a.actionDate.localeCompare(b.actionDate));
+  }, [reminders]);
 
-    return records
-      .filter(r => {
-        // today >= crummeyLetterSendDate and crummeySent is false
-        if (r.crummeyLetterSendDate) {
-          const sendDate = new Date(r.crummeyLetterSendDate + 'T00:00:00');
-          const isPast = sendDate <= today;
-          const notSent = !r.crummeySent && r.status !== 'Letter Sent';
-          return isPast && notSent;
-        }
-        return false;
-      })
-      .sort((a, b) => ((a.crummeyLetterSendDate || '') as string).localeCompare((b.crummeyLetterSendDate || '') as string));
-  }, [records]);
-
-  // Section 2: Premiums due soon (with filter)
   const premiumsDueSoon = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    return records
-      .filter(r => {
-        const daysUntilDue = getDaysFromToday(r.premiumDueDate);
-        return daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= premiumFilterDays;
-      })
-      .sort((a, b) => ((a.premiumDueDate || '') as string).localeCompare((b.premiumDueDate || '') as string));
-  }, [records, premiumFilterDays]);
+    return reminders
+      .filter(r => r.type === 'premium' && r.daysUntilAction <= premiumFilterDays)
+      .sort((a, b) => a.actionDate.localeCompare(b.actionDate));
+  }, [reminders, premiumFilterDays]);
 
   function handleMarkLetterSent(id: string, ilitName: string) {
-    // This would require access to the update function from useILITData
-    // For now, we'll show how it would work when integrated
+    update(id, {
+      crummeyLetterSentDate: new Date().toISOString().slice(0, 10),
+      status: 'Letter Sent'
+    });
     logActivity('letter_sent', `Marked letter sent for ${ilitName}`);
   }
 
@@ -110,15 +92,15 @@ export default function RemindersPage() {
                 </THead>
                 <TBody>
                   {crummeyLettersTodo.map(r => (
-                    <tr key={r.id} className="border-t">
-                      <td className="p-2 font-medium">{r.ilitName}</td>
-                      <td className="p-2">{r.insuredName || '—'}</td>
-                      <td className="p-2">{formatDateMMDD(r.premiumDueDate)}</td>
-                      <td className="p-2">{formatDateMMDD(r.crummeyLetterSendDate)}</td>
-                      <td className="p-2">{statusBadge(r.status)}</td>
+                    <tr key={r.policy.id} className="border-t">
+                      <td className="p-2 font-medium">{r.policy.ilitName}</td>
+                      <td className="p-2">{r.policy.insuredName || '—'}</td>
+                      <td className="p-2">{formatDateMMDD(r.policy.premiumDueDate)}</td>
+                      <td className="p-2">{formatDateMMDD(r.actionDate)}</td>
+                      <td className="p-2">{statusBadge(r.policy.status)}</td>
                       <td className="p-2">
                         <Button
-                          onClick={() => handleMarkLetterSent(r.id, r.ilitName)}
+                          onClick={() => handleMarkLetterSent(r.policy.id, r.policy.ilitName)}
                           className="text-xs px-2 py-1 bg-green-600 hover:bg-green-700"
                         >
                           Mark Sent
@@ -172,24 +154,21 @@ export default function RemindersPage() {
                 </THead>
                 <TBody>
                   {premiumsDueSoon.map(r => {
-                    const daysUntilDue = getDaysFromToday(r.premiumDueDate);
-                    const urgencyColor = daysUntilDue !== null && daysUntilDue <= 7 ? 'bg-red-50' : '';
+                    const urgencyColor = r.daysUntilAction <= 7 ? 'bg-red-50' : '';
                     return (
-                      <tr key={r.id} className={`border-t ${urgencyColor}`}>
-                        <td className="p-2 font-medium">{r.ilitName}</td>
-                        <td className="p-2">{r.insuredName || '—'}</td>
+                      <tr key={r.policy.id} className={`border-t ${urgencyColor}`}>
+                        <td className="p-2 font-medium">{r.policy.ilitName}</td>
+                        <td className="p-2">{r.policy.insuredName || '—'}</td>
                         <td className="p-2">
-                          {formatDateMMDD(r.premiumDueDate)}
-                          {daysUntilDue !== null && (
+                          {formatDateMMDD(r.actionDate)}
                             <div className="text-xs text-gray-500 mt-1">
-                              {daysUntilDue === 0 ? 'Due today' : `${daysUntilDue} day${daysUntilDue !== 1 ? 's' : ''} away`}
+                              {r.daysUntilAction === 0 ? 'Due today' : `${r.daysUntilAction} day${r.daysUntilAction !== 1 ? 's' : ''} away`}
                             </div>
-                          )}
                         </td>
                         <td className="p-2 text-right font-medium">
-                          {r.premiumAmount ? `$${r.premiumAmount.toLocaleString()}` : '—'}
+                          {r.policy.premiumAmount ? `$${r.policy.premiumAmount.toLocaleString()}` : '—'}
                         </td>
-                        <td className="p-2">{statusBadge(r.status)}</td>
+                        <td className="p-2">{statusBadge(r.policy.status)}</td>
                       </tr>
                     );
                   })}

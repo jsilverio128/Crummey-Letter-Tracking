@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { useILITData } from '../../hooks/use-ilit-data';
+import { usePortalData } from '../../hooks/use-portal-data';
 import { useActivity } from '../../hooks/use-activity';
 import { Card } from '../../components/ui/card';
 import { Button } from '../../components/ui/button';
@@ -41,7 +41,7 @@ function getDaysFromToday(dateStr: string | null | undefined): number | null {
 }
 
 export default function CrummeyLettersPage() {
-  const { records, update } = useILITData();
+  const { letters, policies, update } = usePortalData();
   const { log } = useActivity();
   const [showAll, setShowAll] = useState(false);
   const [isDownloading, setIsDownloading] = useState<string | null>(null);
@@ -49,28 +49,12 @@ export default function CrummeyLettersPage() {
 
   // Filter for letters that need to be sent
   const lettersTodo = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
+    return letters.filter(l => l.status === 'pending');
+  }, [letters]);
 
-    const filtered = records.filter((r) => {
-      if (r.crummeyLetterSendDate) {
-        const sendDate = new Date(r.crummeyLetterSendDate + 'T00:00:00');
-        const isPast = sendDate <= today;
-        const notSent = !r.crummeySent && r.status !== 'Letter Sent';
-        return isPast && notSent;
-      }
-      return false;
-    });
+  const displayedLetters = showAll ? letters : lettersTodo;
 
-    return filtered.sort((a, b) => (a.crummeyLetterSendDate || '').localeCompare(b.crummeyLetterSendDate || ''));
-  }, [records]);
-
-  // Combine: overdue first, then upcoming if showAll
-  const displayedLetters = showAll
-    ? records.filter((r) => r.crummeyLetterSendDate)
-    : lettersTodo;
-
-  const handleDownloadPDF = async (record: typeof records[0]) => {
+  const handleDownloadPDF = async (record: typeof policies[0]) => {
     try {
       setIsDownloading(record.id);
 
@@ -101,7 +85,7 @@ export default function CrummeyLettersPage() {
     }
   };
 
-  const handleMarkSent = async (record: typeof records[0]) => {
+  const handleMarkSent = async (record: typeof policies[0]) => {
     try {
       setIsMarking(record.id);
       const today = new Date().toISOString().split('T')[0];
@@ -173,7 +157,8 @@ export default function CrummeyLettersPage() {
                   </tr>
                 </THead>
                 <TBody>
-                  {displayedLetters.map((record) => {
+                  {displayedLetters.map((item) => {
+                    const record = item.policy;
                     const daysFromToday = getDaysFromToday(record.crummeyLetterSendDate);
                     const isPending = !record.crummeySent && record.status !== 'Letter Sent';
                     const isOverdue = daysFromToday !== null && daysFromToday < 0;
@@ -190,8 +175,8 @@ export default function CrummeyLettersPage() {
                                 {daysFromToday < 0
                                   ? `${Math.abs(daysFromToday)} days overdue`
                                   : daysFromToday === 0
-                                    ? 'Send today'
-                                    : `${daysFromToday} days away`}
+                                  ? 'Send today'
+                                  : `${daysFromToday} days away`}
                               </span>
                             )}
                           </div>

@@ -1,7 +1,7 @@
 "use client";
 import React, { useMemo, useRef, useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { useILITData } from '../../hooks/use-ilit-data';
+import { usePortalData } from '../../hooks/use-portal-data';
 import { useActivity } from '../../hooks/use-activity';
 import { useSettings } from '../../hooks/use-settings';
 import { Card } from '../../components/ui/card';
@@ -29,7 +29,7 @@ function formatDateMMDD(dateStr?: string | null) {
 }
 
 export default function DashboardPage() {
-  const { records, addMany } = useILITData();
+  const { policies, addMany, dashboardStats } = usePortalData();
   const { getRecent, log: logActivity } = useActivity();
   const { reminderLeadDays } = useSettings();
   const router = useRouter();
@@ -88,46 +88,13 @@ export default function DashboardPage() {
   }
 
   const metrics = useMemo(() => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    let dueIn30 = 0;
-    let dueIn60 = 0;
-    let lettersPending = 0;
-    let outstanding = 0;
-
-    records.forEach((record: any) => {
-      const daysUntilDue = getDaysFromToday(record.premiumDueDate);
-      const status = record.status || 'Pending';
-      const isPaid = status === 'Paid';
-
-      // Due in 30 Days
-      if (daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 30) {
-        dueIn30++;
-      }
-
-      // Due in 60 Days & Outstanding Amount
-      if (daysUntilDue !== null && daysUntilDue >= 0 && daysUntilDue <= 60) {
-        dueIn60++;
-
-        // Outstanding: sum premiums where status != Paid and premiumDueDate within 60 days
-        if (!isPaid && record.premiumAmount) {
-          outstanding += record.premiumAmount;
-        }
-      }
-
-      // Letters Pending: today >= crummeyLetterSendDate and status != "Letter Sent"
-      if (status !== 'Letter Sent' && record.crummeyLetterSendDate) {
-        const daysTillSendDate = getDaysFromToday(record.crummeyLetterSendDate);
-        // If send date has passed or is today (daysTillSendDate <= 0)
-        if (daysTillSendDate !== null && daysTillSendDate <= 0) {
-          lettersPending++;
-        }
-      }
-    });
-
-    return { dueIn30, dueIn60, lettersPending, outstanding };
-  }, [records]);
+    return {
+      dueIn30: dashboardStats.premiumsDue30Days,
+      dueIn60: dashboardStats.premiumsDue60Days,
+      lettersPending: dashboardStats.lettersToSend,
+      outstanding: dashboardStats.totalOutstandingPremiums
+    };
+  }, [dashboardStats]);
 
   return (
     <div className="space-y-6">

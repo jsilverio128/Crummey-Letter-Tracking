@@ -62,10 +62,10 @@ function determineStatus(record: any): PolicyStatus {
   // If there's an explicit crummeyLetterSendDate, use it to determine "Letter Due"
   if (record.crummeyLetterSendDate) {
     const send = new Date(record.crummeyLetterSendDate + 'T00:00:00');
-    if (send <= today) return 'Letter Due';
+    if (send <= today) return 'Due Soon';
     const daysUntilSend = Math.ceil((send.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-    if (daysUntilSend <= 0) return 'Letter Due';
-    if (daysUntilSend <= 7) return 'Letter Due';
+    if (daysUntilSend <= 0) return 'Due Soon';
+    if (daysUntilSend <= 7) return 'Due Soon';
   }
 
   // Fallback: if due within 35 days mark Pending
