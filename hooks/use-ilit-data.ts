@@ -16,12 +16,13 @@ export function useILITData() {
     try {
       setIsLoading(true);
       setError(null);
-      const response = await fetch('/api/ilit/policies');
+      const response = await fetch('/api/ilit/policies/get');
       if (!response.ok) {
         throw new Error('Failed to fetch policies');
       }
       const data = await response.json();
-      setRecords(Array.isArray(data) ? data : []);
+      const policies = data.policies || [];
+      setRecords(Array.isArray(policies) ? policies : []);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Unknown error';
       setError(message);

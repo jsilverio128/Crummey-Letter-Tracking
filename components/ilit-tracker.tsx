@@ -91,13 +91,14 @@ export function ILITTracker() {
     const form = new FormData();
     form.append('file', f);
     try {
-      // Use the new Supabase-backed upload endpoint
-      const res = await fetch(`/api/ilit/upload?leadDays=${reminderLeadDays}`, {
+      // Use the unified import endpoint
+      const res = await fetch('/api/ilit/import', {
         method: 'POST',
         body: form
       });
+      const json = await res.json();
+      
       if (!res.ok) {
-        const json = await res.json();
         toaster.push({
           id: Date.now().toString(),
           message: `Upload failed: ${json.error || 'Unknown error'}`,
@@ -105,8 +106,8 @@ export function ILITTracker() {
         });
         return;
       }
-      const json = await res.json();
-      const inserted = json.inserted || 0;
+      
+      const inserted = json.insertedCount || 0;
       
       if (inserted > 0) {
         toaster.push({
